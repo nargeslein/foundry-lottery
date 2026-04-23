@@ -31,7 +31,7 @@ contract HelperConfig is CodeConstants, Script {
     mapping(uint256 chainId => NetworkConfig) public networkConfigs;
 
     constructor() {
-        networkConfigs[ETH_SEPOLIA_CHAIN_ID] = getSepoliaETHConfig();
+        networkConfigs[ETH_SEPOLIA_CHAIN_ID] = getSepoliaEthConfig();
     }
 
     function getConfigByChainId(
@@ -50,7 +50,7 @@ contract HelperConfig is CodeConstants, Script {
         return getConfigByChainId(block.chainid);
     }
 
-    function getSepoliaETHConfig() public pure returns (NetworkConfig memory) {
+    function getSepoliaEthConfig() public pure returns (NetworkConfig memory) {
         NetworkConfig memory sepoliaConfig = NetworkConfig({
             entranceFee: 0.01 ether,
             interval: 30, //30 seconds
