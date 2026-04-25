@@ -57,7 +57,7 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
     uint256 private immutable I_ENTRANCE_FEE;
     uint256 private iInterval;
     bytes32 private immutable I_KEY_HASH;
-    uint64 private immutable I_SUBSCRIPTION_ID;
+    uint256 private immutable I_SUBSCRIPTION_ID;
     uint32 private immutable I_CALLBACK_GAS_LIMIT;
 
     address payable[] private sPlayers;
@@ -69,7 +69,7 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
     event WinnerPicked(address indexed winner);
 
     constructor(
-        uint64 subscriptionId,
+        uint256 subscriptionId,
         bytes32 gasLane, // keyHash
         uint256 interval,
         uint256 entranceFee,
@@ -156,6 +156,14 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
     /** Getter Functions */
     function getEntranceFee() external view returns (uint256) {
         return I_ENTRANCE_FEE;
+    }
+
+    function getRaffleState() external view returns (RaffleState) {
+        return sRaffleState;
+    }
+
+    function getPlayer(uint256 index) external view returns (address) {
+        return sPlayers[index];
     }
 
     //Checks, Effects, Interactions pattern is used in the fulfillRandomWords function to prevent reentrancy attacks
