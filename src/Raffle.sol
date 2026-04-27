@@ -67,6 +67,7 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
 
     event RaffleEnter(address indexed player);
     event WinnerPicked(address indexed winner);
+    event RequestedRaffleWinner(uint256 indexed requestId);
 
     constructor(
         uint256 subscriptionId,
@@ -150,7 +151,8 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
                     VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
                 )
             });
-        s_vrfCoordinator.requestRandomWords(str);
+        uint256 requestId = s_vrfCoordinator.requestRandomWords(str);
+        emit RequestedRaffleWinner(requestId);
     }
 
     /** Getter Functions */
@@ -164,6 +166,14 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
 
     function getPlayer(uint256 index) external view returns (address) {
         return sPlayers[index];
+    }
+
+    function getLastTimeStamp() external view returns (uint256) {
+        return sLastTimeStamp;
+    }
+
+    function getRecentWinner() external view returns (address) {
+        return sRecentWinner;
     }
 
     //Checks, Effects, Interactions pattern is used in the fulfillRandomWords function to prevent reentrancy attacks
