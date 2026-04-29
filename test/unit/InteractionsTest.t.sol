@@ -10,9 +10,12 @@ import {
 import {CodeConstants} from "../../script/HelperConfig.s.sol";
 import {LinkToken, ERC677Receiver} from "../mocks/LinkToken.sol";
 import {
-    VRFCoordinatorV2_5Mock
-} from "chainlink/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
+    VRFCoordinatorV2PlusMock
+} from "../mocks/VRFCoordinatorV2PlusMock.sol";
 
+/**
+ * @author Narges H.
+ */
 contract LinkFundingReceiver is ERC677Receiver {
     address public token;
     address public sender;
@@ -31,8 +34,11 @@ contract LinkFundingReceiver is ERC677Receiver {
     }
 }
 
+/**
+ * @author Narges H.
+ */
 contract InteractionsTest is Test, CodeConstants {
-    VRFCoordinatorV2_5Mock private vrfCoordinator;
+    VRFCoordinatorV2PlusMock private vrfCoordinator;
     CreateSubscription private createSubscription;
     FundSubscription private fundSubscription;
     AddConsumer private addConsumer;
@@ -43,20 +49,28 @@ contract InteractionsTest is Test, CodeConstants {
     string private constant BROADCAST_FILE =
         "broadcast/InteractionsTest/31337/run-latest.json";
 
+    modifier skipFork() {
+        if (block.chainid != LOCAL_CHAIN_ID) {
+            return;
+        }
+        _;
+    }
+
     function setUp() external {
-        vrfCoordinator = new VRFCoordinatorV2_5Mock(
+        vrfCoordinator = new VRFCoordinatorV2PlusMock(
             MOCK_BASE_FEE,
-            MOCK_GAS_PRICE_LINK,
-            MOCK_WEI_PER_UNIT_LINK
+            MOCK_GAS_PRICE_LINK
         );
         createSubscription = new CreateSubscription();
         fundSubscription = new FundSubscription();
         addConsumer = new AddConsumer();
     }
 
-    function testCreateSubscriptionCreatesAnActiveSubscription() public {
-        (uint256 subId, address returnedCoordinator) = createSubscription
-            .createSubscription(address(vrfCoordinator));
+    function testCreateSubscriptionCreatesAnActiveSubscription() public skipFork {
+        uint256 subId = createSubscription.createSubscription(
+            address(vrfCoordinator),
+            DEFAULT_ANVIL_KEY
+        );
 
         (
             uint96 balance,
@@ -66,23 +80,24 @@ contract InteractionsTest is Test, CodeConstants {
             address[] memory consumers
         ) = vrfCoordinator.getSubscription(subId);
 
-        assertEq(returnedCoordinator, address(vrfCoordinator));
         assertEq(balance, 0);
         assertEq(nativeBalance, 0);
         assertEq(requestCount, 0);
-        assertTrue(owner != address(0));
+        assertEq(owner, vm.addr(DEFAULT_ANVIL_KEY));
         assertEq(consumers.length, 0);
     }
 
-    function testFundSubscriptionFundsAnExistingLocalSubscription() public {
-        (uint256 subId, ) = createSubscription.createSubscription(
-            address(vrfCoordinator)
+    function testFundSubscriptionFundsAnExistingLocalSubscription() public skipFork {
+        uint256 subId = createSubscription.createSubscription(
+            address(vrfCoordinator),
+            DEFAULT_ANVIL_KEY
         );
 
         fundSubscription.fundSubscription(
             address(vrfCoordinator),
             subId,
-            address(0)
+            address(0),
+            DEFAULT_ANVIL_KEY
         );
 
         (uint96 balance, , , , ) = vrfCoordinator.getSubscription(subId);
@@ -90,17 +105,19 @@ contract InteractionsTest is Test, CodeConstants {
         assertEq(balance, fundSubscription.FUND_AMOUNT());
     }
 
-    function testFundSubscriptionTransfersLinkOnNonLocalChains() public {
+    function testFundSubscriptionTransfersLinkOnNonLocalChains() public skipFork {
         uint256 sepoliaSubscriptionId = 1;
         LinkToken linkToken = new LinkToken();
         LinkFundingReceiver receiver = new LinkFundingReceiver();
-        linkToken.mint(DEFAULT_SENDER, fundSubscription.FUND_AMOUNT());
+        address deployer = vm.addr(DEFAULT_ANVIL_KEY);
+        linkToken.mint(deployer, fundSubscription.FUND_AMOUNT());
 
         vm.chainId(ETH_SEPOLIA_CHAIN_ID);
         fundSubscription.fundSubscription(
             address(receiver),
             sepoliaSubscriptionId,
-            address(linkToken)
+            address(linkToken),
+            DEFAULT_ANVIL_KEY
         );
 
         assertEq(
@@ -108,7 +125,7 @@ contract InteractionsTest is Test, CodeConstants {
             fundSubscription.FUND_AMOUNT()
         );
         assertEq(receiver.token(), address(linkToken));
-        assertEq(receiver.sender(), DEFAULT_SENDER);
+        assertEq(receiver.sender(), deployer);
         assertEq(receiver.amount(), fundSubscription.FUND_AMOUNT());
         assertEq(
             keccak256(receiver.data()),
@@ -116,16 +133,22 @@ contract InteractionsTest is Test, CodeConstants {
         );
     }
 
-    function testFundSubscriptionRunUsesConfigPath() public {
+    function testFundSubscriptionRunUsesConfigPath() public skipFork {
         fundSubscription.run();
     }
 
-    function testAddConsumerAddsRaffleToSubscription() public {
-        (uint256 subId, ) = createSubscription.createSubscription(
-            address(vrfCoordinator)
+    function testAddConsumerAddsRaffleToSubscription() public skipFork {
+        uint256 subId = createSubscription.createSubscription(
+            address(vrfCoordinator),
+            DEFAULT_ANVIL_KEY
         );
 
-        addConsumer.addConsumer(raffle, address(vrfCoordinator), subId);
+        addConsumer.addConsumer(
+            raffle,
+            address(vrfCoordinator),
+            subId,
+            DEFAULT_ANVIL_KEY
+        );
 
         (, , , , address[] memory consumers) = vrfCoordinator.getSubscription(
             subId
@@ -138,35 +161,35 @@ contract InteractionsTest is Test, CodeConstants {
 
     function testFundSubscriptionUsingConfigCreatesAndFundsLocalSubscription()
         public
+        skipFork
     {
         fundSubscription.fundSubscriptionUsingConfig();
     }
 
-    function testCreateSubscriptionRunUsesConfigPath() public {
-        (uint256 subId, address returnedCoordinator) = createSubscription.run();
+    function testCreateSubscriptionRunUsesConfigPath() public skipFork {
+        uint256 subId = createSubscription.run();
 
         assertTrue(subId != 0);
-        assertTrue(returnedCoordinator != address(0));
     }
 
     function testCreateSubscriptionUsingConfigCreatesLocalSubscription()
         public
+        skipFork
     {
-        (uint256 subId, address returnedCoordinator) = createSubscription
-            .createSubscriptionUsingConfig();
+        uint256 subId = createSubscription.createSubscriptionUsingConfig();
 
         assertTrue(subId != 0);
-        assertTrue(returnedCoordinator != address(0));
     }
 
     function testAddConsumerUsingConfigRevertsWhenConfigHasNoSubscription()
         public
+        skipFork
     {
         vm.expectRevert();
         addConsumer.addConsumerUsingConfig(raffle);
     }
 
-    function testAddConsumerRunFindsDeploymentBeforeConfigRevert() public {
+    function testAddConsumerRunFindsDeploymentBeforeConfigRevert() public skipFork {
         vm.createDir(BROADCAST_DIR, true);
         vm.writeFile(
             BROADCAST_FILE,

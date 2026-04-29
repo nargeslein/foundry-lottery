@@ -4,6 +4,9 @@ pragma solidity ^0.8.0;
 
 import {ERC20} from "@solmate/tokens/ERC20.sol";
 
+/**
+ * @author Narges H.
+ */
 interface ERC677Receiver {
     function onTokenTransfer(
         address _sender,
@@ -12,6 +15,9 @@ interface ERC677Receiver {
     ) external;
 }
 
+/**
+ * @author Narges H.
+ */
 contract LinkToken is ERC20 {
     uint256 constant INITIAL_SUPPLY = 1000000000000000000000000;
     uint8 constant DECIMALS = 18;

@@ -4,54 +4,60 @@ import {Script} from "forge-std/Script.sol";
 import {Raffle} from "../src/Raffle.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 import {
-    VRFCoordinatorV2_5Mock
-} from "chainlink/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
-import {
     CreateSubscription,
     FundSubscription,
     AddConsumer
 } from "./Interactions.s.sol";
 
+/**
+ * @author Narges H.
+ */
 contract DeployRaffle is Script {
-    function run() public {}
-    function deployContract() public returns (Raffle, HelperConfig) {
+    function run() public returns (Raffle, HelperConfig) {
         HelperConfig helperConfig = new HelperConfig();
-        //local -> deploy mocks
-        //sepolia -> get sepolia config
         HelperConfig.NetworkConfig memory networkConfig = helperConfig
             .getConfig();
 
         if (networkConfig.subscriptionId == 0) {
             CreateSubscription createSubscription = new CreateSubscription();
-            (uint256 subId, address vrfCoordinator) = createSubscription
-                .createSubscription(networkConfig.vrfCoordinator);
+            uint256 subId = createSubscription.createSubscription(
+                networkConfig.vrfCoordinator,
+                networkConfig.deployerKey
+            );
             networkConfig.subscriptionId = subId;
-            networkConfig.vrfCoordinator = vrfCoordinator;
+
             FundSubscription fundSubscription = new FundSubscription();
             fundSubscription.fundSubscription(
-                vrfCoordinator,
+                networkConfig.vrfCoordinator,
                 subId,
-                networkConfig.link
+                networkConfig.link,
+                networkConfig.deployerKey
             );
         }
 
-        vm.startBroadcast();
+        vm.startBroadcast(networkConfig.deployerKey);
         Raffle raffle = new Raffle(
-            networkConfig.subscriptionId,
-            networkConfig.keyHash,
-            networkConfig.interval,
             networkConfig.entranceFee,
-            networkConfig.callbackGasLimit,
-            networkConfig.vrfCoordinator
-        );
-        vm.stopBroadcast();
-        // If we deployed a mock, we need to add the raffle contract as a consumer
-        vm.startBroadcast();
-        VRFCoordinatorV2_5Mock(networkConfig.vrfCoordinator).addConsumer(
+            networkConfig.interval,
+            networkConfig.vrfCoordinator,
+            networkConfig.gasLane,
             networkConfig.subscriptionId,
-            address(raffle)
+            networkConfig.callbackGasLimit
         );
         vm.stopBroadcast();
+
+        AddConsumer addConsumer = new AddConsumer();
+        addConsumer.addConsumer(
+            address(raffle),
+            networkConfig.vrfCoordinator,
+            networkConfig.subscriptionId,
+            networkConfig.deployerKey
+        );
+
         return (raffle, helperConfig);
+    }
+
+    function deployContract() public returns (Raffle, HelperConfig) {
+        return run();
     }
 }

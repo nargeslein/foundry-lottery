@@ -6,10 +6,15 @@ import {Raffle} from "../../src/Raffle.sol";
 import {DeployRaffle} from "../../script/DeployRaffle.s.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
 import {
-    VRFCoordinatorV2_5Mock
-} from "chainlink/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
+    VRFCoordinatorV2PlusMock
+} from "../mocks/VRFCoordinatorV2PlusMock.sol";
 
+/**
+ * @author Narges H.
+ */
 contract RaffleTest is Test {
+    event EnteredRaffle(address indexed player);
+
     Raffle public raffle;
     HelperConfig public helperConfig;
 
@@ -17,7 +22,6 @@ contract RaffleTest is Test {
     uint256 interval;
     address vrfCoordinator;
     bytes32 gasLane;
-    bytes32 keyHash;
     uint32 callbackGasLimit;
     uint256 subscriptionId;
     address linkToken;
@@ -33,14 +37,21 @@ contract RaffleTest is Test {
         _;
     }
 
+    modifier skipFork() {
+        if (block.chainid != 31337) {
+            return;
+        }
+        _;
+    }
+
     function testFulfillRandomWordsCanOnlyBeCalledAfterPerformUpkeep(
         uint256 randomRequestId
-    ) public raffleEnteredAndTimePassed {
+    ) public raffleEnteredAndTimePassed skipFork {
         // Arrange
         // Act / Assert
-        vm.expectRevert(VRFCoordinatorV2_5Mock.InvalidRequest.selector);
+        vm.expectRevert(bytes("nonexistent request"));
         // vm.mockCall could be used here...
-        VRFCoordinatorV2_5Mock(vrfCoordinator).fulfillRandomWords(
+        VRFCoordinatorV2PlusMock(vrfCoordinator).fulfillRandomWords(
             randomRequestId,
             address(raffle)
         );
@@ -65,14 +76,13 @@ contract RaffleTest is Test {
 
     function setUp() external {
         DeployRaffle deployer = new DeployRaffle();
-        (raffle, helperConfig) = deployer.deployContract();
+        (raffle, helperConfig) = deployer.run();
         HelperConfig.NetworkConfig memory networkConfig = helperConfig
             .getConfig();
         entranceFee = networkConfig.entranceFee;
         interval = networkConfig.interval;
         vrfCoordinator = networkConfig.vrfCoordinator;
         gasLane = networkConfig.gasLane;
-        keyHash = networkConfig.keyHash;
         callbackGasLimit = networkConfig.callbackGasLimit;
         subscriptionId = networkConfig.subscriptionId;
         linkToken = networkConfig.link;
@@ -121,7 +131,7 @@ contract RaffleTest is Test {
 
     function testRaffleRevertWhenYouDontPayEnough() public {
         vm.prank(PLAYER);
-        vm.expectRevert(Raffle.Raffle__NotEnoughETHEntered.selector);
+        vm.expectRevert(Raffle.Raffle__NotEnoughEthSent.selector);
         raffle.enterRaffle();
     }
 
@@ -139,7 +149,7 @@ contract RaffleTest is Test {
     function testRaffleEmitsEventOnEntrance() public {
         vm.prank(PLAYER);
         vm.expectEmit(true, false, false, false, address(raffle));
-        emit Raffle.RaffleEnter(PLAYER);
+        emit EnteredRaffle(PLAYER);
         raffle.enterRaffle{value: entranceFee}();
     }
 
@@ -182,6 +192,7 @@ contract RaffleTest is Test {
     function testFulfillrandomWordsPicksAWinnerResetsAndSendsMoney()
         public
         raffleEnteredAndTimePassed
+        skipFork
     {
         //arrange
         uint256 additionalEntrants = 3; //4 total
@@ -205,7 +216,7 @@ contract RaffleTest is Test {
         raffle.performUpkeep(""); // emits requestId
         Vm.Log[] memory entries = vm.getRecordedLogs();
         bytes32 requestId = entries[1].topics[1];
-        VRFCoordinatorV2_5Mock(vrfCoordinator).fulfillRandomWords(
+        VRFCoordinatorV2PlusMock(vrfCoordinator).fulfillRandomWords(
             uint256(requestId),
             address(raffle)
         );
